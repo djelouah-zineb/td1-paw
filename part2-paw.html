@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Attendance — Academic Style</title>
+<style>
+  /* Simple academic style (keeps original look) */
+  :root{
+    --bg:#fbfcfd; --card:#fff; --muted:#6b7280; --accent:#2563eb;
+    --good:#d1fae5; --warn:#fef3c7; --bad:#fee2e2;
+    --table-border:#d1d5db;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  body{background:var(--bg); color:#111; margin:0; padding:0;}
+  .navbar{
+    background: #ffffff;
+    border-bottom: 1px solid #e6eefc;
+    padding:12px 20px;
+    display:flex;
+    align-items:center;
+    gap:20px;
+  }
+  .nav-brand{font-weight:700;color:var(--accent);font-size:18px}
+  .nav-links{margin-left:12px;display:flex;gap:14px}
+  .nav-links a{color:#334155;text-decoration:none;padding:6px 10px;border-radius:6px;font-weight:600}
+  .nav-links a:hover{background:rgba(37,99,235,0.08);color:var(--accent)}
+  .container{max-width:1100px;margin:20px auto;padding:20px;}
+  h1{font-size:20px;margin:0 0 12px;color:var(--accent)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  /* removed search and sort buttons as requested */
+  button {background:var(--accent); color:white; border:none; padding:7px 10px;border-radius:6px; cursor:pointer}
+  button.alt {background:#6b7280}
+  .stats {display:flex;gap:12px;margin-bottom:12px;align-items:center}
+  .stat-card{background:var(--card);padding:10px;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,0.04);min-width:140px}
+  .stat-title{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .stat-value{font-weight:700;font-size:18px}
+  .bars {flex:1}
+  .bar {height:12px;background:#eef2ff;border-radius:8px;overflow:hidden;border:1px solid #e6eefc}
+  .bar-fill{height:100%;width:0%;background:var(--accent);transition:width .4s ease}
+
+  /* Circles (pastel theme C3) */
+  .circles {display:flex;gap:12px;margin-bottom:12px;align-items:center}
+  .circle-card{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,0.04);min-width:160px;text-align:center}
+  .circle-visual{width:94px;height:94px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:#0f172a;margin-bottom:8px}
+  /* soft pastel colors */
+  .c-students{background:conic-gradient(#fce7f3 0deg, #fce7f3 360deg);} /* will be overwritten inline */
+  .c-att{background:conic-gradient(#eef2ff 0deg, #eef2ff 360deg);}
+  .c-part{background:conic-gradient(#f0fdf4 0deg, #f0fdf4 360deg);}
+  .circle-label{font-size:13px;color:var(--muted)}
+
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden;border:1px solid var(--table-border)}
+  th,td{padding:8px;border-bottom:1px solid #f3f4f6;font-size:13px;text-align:center}
+  thead th{background:#f9fafb;color:#111;font-weight:700}
+  tbody tr:hover{background:#f8fafc}
+  .small{font-size:12px;color:var(--muted)}
+  .delete-btn{background:#ef4444;padding:6px;border-radius:6px;color:white;border:none;cursor:pointer}
+
+  /* status colors */
+  tr.status-good{background:var(--good)}
+  tr.status-warn{background:var(--warn)}
+  tr.status-bad{background:var(--bad)}
+
+  form.card{background:var(--card);padding:12px;border-radius:8px;border:1px solid var(--table-border);max-width:480px;margin-top:14px}
+  form input{width:100%;padding:8px;border:1px solid #e6e9ef;border-radius:6px;margin:6px 0}
+  .error{color:#b91c1c;font-size:12px;margin-top:-4px;margin-bottom:6px;text-align:left}
+  .row-actions{display:flex;gap:8px;align-items:center;justify-content:center}
+  .sortMsg{font-size:13px;color:var(--muted);margin-left:8px}
+
+  /* small responsive tweaks */
+  @media (max-width:900px){
+    .circles{flex-wrap:wrap}
+  }
+</style>
+</head>
+<body>
+  <!-- NAVBAR (A1 style: white bar with blue hover) -->
+  <div class="navbar">
+    <div class="nav-brand">Academic Attendance</div>
+    <div class="nav-links" role="navigation" aria-label="Main navigation">
+      <a href="#">Home</a>
+      <a href="#">Attendance</a>
+      <a href="#">Add Student</a>
+      <a href="#">Report</a>
+      <a href="#">Logout</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1>Attendance — Academic Version</h1>
+
+    <!-- Controls area kept minimal (no search/sort/report/reset/highlight) -->
+    <div class="controls" aria-hidden="true">
+      <div style="flex:1"></div>
+      <!-- keeping space for possible future actions -->
+      <button id="addFocus" class="alt" style="display:none">Hidden</button>
+    </div>
+
+    <!-- Circles (pastel C3) -->
+    <div class="circles" aria-hidden="false">
+      <div class="circle-card" aria-hidden="false">
+        <div id="circleStudents" class="circle-visual c-students" style="background: conic-gradient(#fde8f2 0deg, #fde8f2 360deg);">0</div>
+        <div class="circle-label">Students</div>
+      </div>
+      <div class="circle-card">
+        <div id="circleAttendance" class="circle-visual c-att" style="background: conic-gradient(#eef7ff 0deg, #eef7ff 360deg);">0%</div>
+        <div class="circle-label">Attendance %</div>
+      </div>
+      <div class="circle-card">
+        <div id="circleParticipation" class="circle-visual c-part" style="background: conic-gradient(#f1fbf2 0deg, #f1fbf2 360deg);">0%</div>
+        <div class="circle-label">Participation %</div>
+      </div>
+    </div>
+
+    <!-- Original stat bars (kept as in original) -->
+    <div class="stats" aria-hidden="false">
+      <div class="stat-card">
+        <div class="stat-title">Students</div>
+        <div class="stat-value" id="studentCount">0</div>
+      </div>
+      <div class="stat-card bars" style="min-width:260px">
+        <div class="stat-title">Attendance %</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="flex:1"><div class="bar"><div id="attendanceFill" class="bar-fill"></div></div></div>
+          <div class="stat-value" id="attendancePct">0%</div>
+        </div>
+      </div>
+      <div class="stat-card bars" style="min-width:260px">
+        <div class="stat-title">Participation %</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="flex:1"><div class="bar"><div id="partFill" class="bar-fill"></div></div></div>
+          <div class="stat-value" id="partPct">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- per-session simple counts -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <div class="stat-card" style="min-width:200px">
+        <div class="stat-title">Session Presents (S1–S6)</div>
+        <div class="small" id="sessionCounts">0 / 0 / 0 / 0 / 0 / 0</div>
+      </div>
+      <div style="flex:1"></div>
+    </div>
+
+    <table id="attendanceTable" aria-label="Attendance table">
+      <thead>
+        <tr>
+          <th>ID</th><th>Last</th><th>First</th>
+          <th>S1 P</th><th>S1 Pa</th>
+          <th>S2 P</th><th>S2 Pa</th>
+          <th>S3 P</th><th>S3 Pa</th>
+          <th>S4 P</th><th>S4 Pa</th>
+          <th>S5 P</th><th>S5 Pa</th>
+          <th>S6 P</th><th>S6 Pa</th>
+          <th>Abs</th><th>Par</th><th>Message</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <form id="addForm" class="card" novalidate>
+      <h3 style="margin:0 0 8px 0">Add Student</h3>
+      <input id="stuId" placeholder="Student ID (numbers only)">
+      <div id="idErr" class="error"></div>
+      <input id="stuLast" placeholder="Last name (letters)">
+      <div id="lastErr" class="error"></div>
+      <input id="stuFirst" placeholder="First name (letters)">
+      <div id="firstErr" class="error"></div>
+      <input id="stuEmail" placeholder="Email">
+      <div id="emailErr" class="error"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <button type="submit">Add (no reload)</button>
+        <div id="confirm" style="color:green;font-weight:600;display:none">Student added ✓</div>
+      </div>
+    </form>
+
+    <!-- reportArea removed (showReport button removed) -->
+  </div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script>
+/* jQuery implementation — original academic look preserved, modified as requested */
+const TOTAL_SESSIONS = 6;
+const $tbody = $("#attendanceTable tbody");
+const $studentCountEl = $("#studentCount");
+const $attendanceFill = $("#attendanceFill");
+const $partFill = $("#partFill");
+const $attendancePct = $("#attendancePct");
+const $partPct = $("#partPct");
+const $sessionCountsEl = $("#sessionCounts");
+
+// circle elements (pastel)
+const $circleStudents = $("#circleStudents");
+const $circleAttendance = $("#circleAttendance");
+const $circleParticipation = $("#circleParticipation");
+
+function createSampleData(){
+  // Add 3 sample students (as required)
+  addStudentRow({id:'232331514208', last:'Djelouah', first:'Zineb'}, [true,true,false,false,false,false], [true,false,false,false,false,false]);
+  addStudentRow({id:'232352627388', last:'Dehikel', first:'Racha'}, [true,false,true,true,true,true], [false,true,true,true,true,false]);
+  addStudentRow({id:'232349484903', last:'Salman', first:'Rania'}, [true,true,false,true,true,false], [false,false,true,false,true,false]);
+}
+function addStudentRow(person, presentArray=null, partArray=null){
+  // build row
+  const $tr = $('<tr>').html(`
+    <td class="cell-id">${escapeHtml(person.id || '')}</td>
+    <td class="cell-last">${escapeHtml(person.last || '')}</td>
+    <td class="cell-first">${escapeHtml(person.first || '')}</td>
+    ${new Array(TOTAL_SESSIONS).fill(0).map((_,i)=>`
+      <td><input type="checkbox" class="present" ${presentArray ? (presentArray[i] ? 'checked' : '') : ''}></td>
+      <td><input type="checkbox" class="part" ${partArray ? (partArray[i] ? 'checked' : '') : ''}></td>
+    `).join('')}
+    <td class="cell-abs small"></td>
+    <td class="cell-par small"></td>
+    <td class="cell-msg small" style="text-align:left;padding-left:8px"></td>
+    <td class="cell-act"><button class="delete-btn" title="Delete">Delete</button></td>
+  `);
+  $tbody.append($tr);
+  attachRowEvents($tr);
+  updateRow($tr);
+}
+
+function attachRowEvents($tr){
+  $tr.find('input[type=checkbox]').on('change', function() {
+    updateRow($tr);
+  });
+  $tr.find('.delete-btn').on('click', function(e){
+    e.preventDefault();
+    $tr.remove();
+    updateAll();
+  });
+  $tr.on('mouseenter', function() {
+    $(this).addClass('row-hover');
+  }).on('mouseleave', function() {
+    updateRow($(this));
+  }).on('click', function(e){
+    // avoid firing when clicking delete or checkbox
+    if($(e.target).is('input') || $(e.target).closest('.delete-btn').length) return;
+    const last = $(this).find('.cell-last').text();
+    const first = $(this).find('.cell-first').text();
+    const absText = $(this).find('.cell-abs').text() || '0 Abs';
+    alert(`${last} ${first} — ${absText}`);
+  });
+}
+
+function updateRow($tr){
+  const presentCount = $tr.find('.present:checked').length;
+  const partCount = $tr.find('.part:checked').length;
+  const abs = TOTAL_SESSIONS - presentCount;
+  $tr.find('.cell-abs').text(`${abs} Abs`);
+  $tr.find('.cell-par').text(`${partCount} Par`);
+  // message & coloring
+  let msg = '';
+  $tr.removeClass('status-good status-warn status-bad');
+  if(abs >= 5){ msg = 'Excluded — too many absences'; $tr.addClass('status-bad'); }
+  else if(abs >= 3){ msg = 'Warning — attendance low'; $tr.addClass('status-warn'); }
+  else { msg = 'Good attendance'; $tr.addClass('status-good'); }
+  if(partCount <= 1 && abs < 5) msg += ' — needs more participation';
+  $tr.find('.cell-msg').text(msg);
+  // update global stats
+  updateAll();
+}
+
+function updateAll(){
+  // compute global stats
+  const $rows = $tbody.find('tr');
+  const total = $rows.length;
+  $studentCountEl.text(total);
+
+  // update circles: students count (shows number)
+  updateCircleStudents(total);
+
+  let totalPresent = 0, totalPart = 0;
+  const sessionCounts = new Array(TOTAL_SESSIONS).fill(0);
+  $rows.each(function() {
+    const $row = $(this);
+    $row.find('.present').each(function(i) {
+      if(this.checked) {
+        totalPresent++;
+        sessionCounts[i]++;
+      }
+    });
+    $row.find('.part:checked').each(function() {
+      totalPart++;
+    });
+  });
+  const totalBoxes = total * TOTAL_SESSIONS || 1;
+  const attPct = Math.round((totalPresent / totalBoxes) * 100);
+  const partPct = Math.round((totalPart / totalBoxes) * 100);
+
+  // update original bar fills + labels
+  $attendanceFill.css('width', attPct + '%');
+  $partFill.css('width', partPct + '%');
+  $attendancePct.text(attPct + '%');
+  $partPct.text(partPct + '%');
+  $sessionCountsEl.text(sessionCounts.map(c=>`${c}`).join(' / '));
+
+  // update pastel circles percentages
+  updateCircleAttendance(attPct);
+  updateCircleParticipation(partPct);
+}
+
+function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+/* Form handling (validation + add row without reload) */
+$('#addForm').on('submit', function(e) {
+  e.preventDefault();
+  // clear errors
+  $('#idErr, #lastErr, #firstErr, #emailErr').text('');
+  let ok = true;
+  const id = $('#stuId').val().trim();
+  const last = $('#stuLast').val().trim();
+  const first = $('#stuFirst').val().trim();
+  const email = $('#stuEmail').val().trim();
+  if(!/^[0-9]+$/.test(id)){ $('#idErr').text('ID must be numeric'); ok=false; }
+  if(!/^[A-Za-z]+(?:[-' ]?[A-Za-z]+)*$/.test(last)){ $('#lastErr').text('Letters only'); ok=false; }
+  if(!/^[A-Za-z]+(?:[-' ]?[A-Za-z]+)*$/.test(first)){ $('#firstErr').text('Letters only'); ok=false; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ $('#emailErr').text('Invalid email'); ok=false; }
+  if(!ok) return;
+  addStudentRow({id, last, first}, new Array(TOTAL_SESSIONS).fill(true), new Array(TOTAL_SESSIONS).fill(false));
+  $('#confirm').show().delay(2200).fadeOut();
+  this.reset();
+});
+
+/* -------------------------
+   Pastel circle helpers (C3)
+   ------------------------- */
+/* update Students circle (shows count number) */
+function updateCircleStudents(count){
+  // We'll show number in center and use a subtle ring based on percentage of e.g., up to 60 students for visual fill.
+  const maxDemo = Math.max(20, count); // avoid 0 ring with small samples
+  const percent = Math.min(Math.round((count / maxDemo) * 100), 100);
+  $circleStudents.text(count);
+  // pastel pink-lilac gradient
+  const start = '#fde8f2'; // pale pink
+  const fill = '#fbcfe8'; // slightly stronger
+  $circleStudents.css('background', `conic-gradient(${fill} ${percent*3.6}deg, ${start} 0deg)`);
+}
+
+/* update Attendance circle (percentage) */
+function updateCircleAttendance(pct){
+  $circleAttendance.text(pct + '%');
+  // pastel blue gradient
+  const start = '#eef7ff';
+  const fill = '#dbeafe';
+  $circleAttendance.css('background', `conic-gradient(${fill} ${pct*3.6}deg, ${start} 0deg)`);
+}
+
+/* update Participation circle (percentage) */
+function updateCircleParticipation(pct){
+  $circleParticipation.text(pct + '%');
+  // pastel green gradient
+  const start = '#f1fbf2';
+  const fill = '#dcfce7';
+  $circleParticipation.css('background', `conic-gradient(${fill} ${pct*3.6}deg, ${start} 0deg)`);
+}
+
+/* initialize */
+createSampleData();
+updateAll();
+</script>
+</body>
+</html>

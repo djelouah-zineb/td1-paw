@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Attendance — Academic Style</title>
+<style>
+  /* Simple academic style */
+  :root{
+    --bg:#fbfcfd; --card:#fff; --muted:#6b7280; --accent:#2563eb;
+    --good:#d1fae5; --warn:#fef3c7; --bad:#fee2e2;
+    --table-border:#d1d5db;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  body{background:var(--bg); color:#111; margin:20px; padding:0;}
+  .container{max-width:1100px;margin:0 auto;padding:20px;}
+  h1{font-size:20px;margin:0 0 12px;color:var(--accent)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  input.search{padding:6px 8px;border:1px solid var(--table-border);border-radius:6px;width:220px}
+  button {background:var(--accent); color:white; border:none; padding:7px 10px;border-radius:6px; cursor:pointer}
+  button.alt {background:#6b7280}
+  .stats {display:flex;gap:12px;margin-bottom:12px;align-items:center}
+  .stat-card{background:var(--card);padding:10px;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,0.04);min-width:140px}
+  .stat-title{font-size:12px;color:var(--muted);margin-bottom:6px}
+  .stat-value{font-weight:700;font-size:18px}
+  .bars {flex:1}
+  .bar {height:12px;background:#eef2ff;border-radius:8px;overflow:hidden;border:1px solid #e6eefc}
+  .bar-fill{height:100%;width:0%;background:var(--accent);transition:width .4s ease}
+
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden;border:1px solid var(--table-border)}
+  th,td{padding:8px;border-bottom:1px solid #f3f4f6;font-size:13px;text-align:center}
+  thead th{background:#f9fafb;color:#111;font-weight:700}
+  tbody tr:hover{background:#f8fafc}
+  .small{font-size:12px;color:var(--muted)}
+  .delete-btn{background:#ef4444;padding:6px;border-radius:6px;color:white;border:none;cursor:pointer}
+
+  /* status colors */
+  tr.status-good{background:var(--good)}
+  tr.status-warn{background:var(--warn)}
+  tr.status-bad{background:var(--bad)}
+
+  form.card{background:var(--card);padding:12px;border-radius:8px;border:1px solid var(--table-border);max-width:480px;margin-top:14px}
+  form input{width:100%;padding:8px;border:1px solid #e6e9ef;border-radius:6px;margin:6px 0}
+  .error{color:#b91c1c;font-size:12px;margin-top:-4px;margin-bottom:6px;text-align:left}
+  .row-actions{display:flex;gap:8px;align-items:center;justify-content:center}
+  #reportArea{margin-top:12px;background:var(--card);padding:12px;border-radius:8px;border:1px solid var(--table-border)}
+  canvas{display:block;margin-top:8px;background:#fff;border:1px solid #eee;border-radius:6px}
+  .sortMsg{font-size:13px;color:var(--muted);margin-left:8px}
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Attendance — Academic Version</h1>
+
+    <div class="controls">
+      <input type="text" id="searchBox" class="search" placeholder="Search by last or first name">
+      <button id="sortAbs">Sort by Absences ↑</button>
+      <button id="sortPar" class="alt">Sort by Participation ↓</button>
+      <div class="sortMsg" id="sortMsg">Not sorted</div>
+      <div style="flex:1"></div>
+      <button id="showReport">Show Report</button>
+      <button id="highlightGood">Highlight Excellent</button>
+      <button id="resetColors" class="alt">Reset Colors</button>
+    </div>
+
+    <div class="stats" aria-hidden="false">
+      <div class="stat-card">
+        <div class="stat-title">Students</div>
+        <div class="stat-value" id="studentCount">0</div>
+      </div>
+      <div class="stat-card bars" style="min-width:260px">
+        <div class="stat-title">Attendance %</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="flex:1"><div class="bar"><div id="attendanceFill" class="bar-fill"></div></div></div>
+          <div class="stat-value" id="attendancePct">0%</div>
+        </div>
+      </div>
+      <div class="stat-card bars" style="min-width:260px">
+        <div class="stat-title">Participation %</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div style="flex:1"><div class="bar"><div id="partFill" class="bar-fill"></div></div></div>
+          <div class="stat-value" id="partPct">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- per-session simple counts -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <div class="stat-card" style="min-width:200px">
+        <div class="stat-title">Session Presents (S1–S6)</div>
+        <div class="small" id="sessionCounts">0 / 0 / 0 / 0 / 0 / 0</div>
+      </div>
+      <div style="flex:1"></div>
+    </div>
+
+    <table id="attendanceTable" aria-label="Attendance table">
+      <thead>
+        <tr>
+          <th>ID</th><th>Last</th><th>First</th>
+          <th>S1 P</th><th>S1 Pa</th>
+          <th>S2 P</th><th>S2 Pa</th>
+          <th>S3 P</th><th>S3 Pa</th>
+          <th>S4 P</th><th>S4 Pa</th>
+          <th>S5 P</th><th>S5 Pa</th>
+          <th>S6 P</th><th>S6 Pa</th>
+          <th>Abs</th><th>Par</th><th>Message</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <form id="addForm" class="card" novalidate>
+      <h3 style="margin:0 0 8px 0">Add Student</h3>
+      <input id="stuId" placeholder="Student ID (numbers only)">
+      <div id="idErr" class="error"></div>
+      <input id="stuLast" placeholder="Last name (letters)">
+      <div id="lastErr" class="error"></div>
+      <input id="stuFirst" placeholder="First name (letters)">
+      <div id="firstErr" class="error"></div>
+      <input id="stuEmail" placeholder="Email">
+      <div id="emailErr" class="error"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <button type="submit">Add (no reload)</button>
+        <div id="confirm" style="color:green;font-weight:600;display:none">Student added ✓</div>
+      </div>
+    </form>
+
+    <div id="reportArea" hidden>
+      <strong>Report</strong>
+      <div id="reportSummary" class="small" style="margin-top:6px"></div>
+      <canvas id="reportChart" width="700" height="160" aria-label="Attendance chart"></canvas>
+
+      <!-- WEEKLY grouped chart (1 chart with 18 bars: 3 bars per week S1..S6) -->
+      <div style="margin-top:12px">
+        <strong>Weekly (S1–S6) — Presence / Participation / Absence</strong>
+        <canvas id="weeklyChart" width="900" height="260" aria-label="Weekly attendance chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script>
+/* jQuery implementation — academic look */
+const TOTAL_SESSIONS = 6;
+const $tbody = $("#attendanceTable tbody");
+const $studentCountEl = $("#studentCount");
+const $attendanceFill = $("#attendanceFill");
+const $partFill = $("#partFill");
+const $attendancePct = $("#attendancePct");
+const $partPct = $("#partPct");
+const $sessionCountsEl = $("#sessionCounts");
+const $reportArea = $("#reportArea");
+const $reportSummary = $("#reportSummary");
+const $reportCanvas = $("#reportChart");
+const reportCtx = $reportCanvas[0].getContext('2d');
+const weeklyCanvas = document.getElementById('weeklyChart');
+const weeklyCtx = weeklyCanvas.getContext('2d');
+
+function createSampleData(){
+  // Add 3 sample students (as required)
+  addStudentRow({id:'232331514208', last:'Djelouah', first:'Zineb'}, [true,true,false,false,false,false], [true,false,false,false,false,false]);
+  addStudentRow({id:'232352627388', last:'Dehikel', first:'Racha'}, [true,false,true,true,true,true], [false,true,true,true,true,false]);
+  addStudentRow({id:'232349484903', last:'Salman', first:'Rania'}, [true,true,false,true,true,false], [false,false,true,false,true,false]);
+}
+function addStudentRow(person, presentArray=null, partArray=null){
+  // build row
+  const $tr = $('<tr>').html(`
+    <td class="cell-id">${escapeHtml(person.id || '')}</td>
+    <td class="cell-last">${escapeHtml(person.last || '')}</td>
+    <td class="cell-first">${escapeHtml(person.first || '')}</td>
+    ${new Array(TOTAL_SESSIONS).fill(0).map((_,i)=>`
+      <td><input type="checkbox" class="present" ${presentArray ? (presentArray[i] ? 'checked' : '') : ''}></td>
+      <td><input type="checkbox" class="part" ${partArray ? (partArray[i] ? 'checked' : '') : ''}></td>
+    `).join('')}
+    <td class="cell-abs small"></td>
+    <td class="cell-par small"></td>
+    <td class="cell-msg small" style="text-align:left;padding-left:8px"></td>
+    <td class="cell-act"><button class="delete-btn" title="Delete">Delete</button></td>
+  `);
+  $tbody.append($tr);
+  attachRowEvents($tr);
+  updateRow($tr);
+}
+
+function attachRowEvents($tr){
+  $tr.find('input[type=checkbox]').on('change', function() {
+    updateRow($tr);
+  });
+  $tr.find('.delete-btn').on('click', function(e){
+    e.preventDefault();
+    $tr.remove();
+    updateAll();
+  });
+  $tr.on('mouseenter', function() {
+    $(this).addClass('row-hover');
+  }).on('mouseleave', function() {
+    updateRow($(this));
+  }).on('click', function(e){
+    // avoid firing when clicking delete or checkbox
+    if($(e.target).is('input') || $(e.target).closest('.delete-btn').length) return;
+    const last = $(this).find('.cell-last').text();
+    const first = $(this).find('.cell-first').text();
+    const absText = $(this).find('.cell-abs').text() || '0 Abs';
+    alert(`${last} ${first} — ${absText}`);
+  });
+}
+
+function updateRow($tr){
+  const presentCount = $tr.find('.present:checked').length;
+  const partCount = $tr.find('.part:checked').length;
+  const abs = TOTAL_SESSIONS - presentCount;
+  $tr.find('.cell-abs').text(`${abs} Abs`);
+  $tr.find('.cell-par').text(`${partCount} Par`);
+  // message & coloring
+  let msg = '';
+  $tr.removeClass('status-good status-warn status-bad');
+  if(abs >= 5){ msg = 'Excluded — too many absences'; $tr.addClass('status-bad'); }
+  else if(abs >= 3){ msg = 'Warning — attendance low'; $tr.addClass('status-warn'); }
+  else { msg = 'Good attendance'; $tr.addClass('status-good'); }
+  if(partCount <= 1 && abs < 5) msg += ' — needs more participation';
+  $tr.find('.cell-msg').text(msg);
+  // update global stats
+  updateAll();
+}
+
+function updateAll(){
+  // compute global stats
+  const $rows = $tbody.find('tr');
+  const total = $rows.length;
+  $studentCountEl.text(total);
+  let totalPresent = 0, totalPart = 0;
+  const sessionCounts = new Array(TOTAL_SESSIONS).fill(0);
+  $rows.each(function() {
+    const $row = $(this);
+    $row.find('.present').each(function(i) {
+      if(this.checked) {
+        totalPresent++;
+        sessionCounts[i]++;
+      }
+    });
+    $row.find('.part:checked').each(function() {
+      totalPart++;
+    });
+  });
+  const totalBoxes = total * TOTAL_SESSIONS || 1;
+  const attPct = Math.round((totalPresent / totalBoxes) * 100);
+  const partPct = Math.round((totalPart / totalBoxes) * 100);
+  $attendanceFill.css('width', attPct + '%');
+  $partFill.css('width', partPct + '%');
+  $attendancePct.text(attPct + '%');
+  $partPct.text(partPct + '%');
+  $sessionCountsEl.text(sessionCounts.map(c=>`${c}`).join(' / '));
+  // also update per-row color classes remain valid (updateRow ensures)
+}
+
+/* Form handling (validation + add row without reload) */
+$('#addForm').on('submit', function(e) {
+  e.preventDefault();
+  // clear errors
+  $('#idErr, #lastErr, #firstErr, #emailErr').text('');
+  let ok = true;
+  const id = $('#stuId').val().trim();
+  const last = $('#stuLast').val().trim();
+  const first = $('#stuFirst').val().trim();
+  const email = $('#stuEmail').val().trim();
+  if(!/^[0-9]+$/.test(id)){ $('#idErr').text('ID must be numeric'); ok=false; }
+  if(!/^[A-Za-z]+(?:[-' ]?[A-Za-z]+)*$/.test(last)){ $('#lastErr').text('Letters only'); ok=false; }
+  if(!/^[A-Za-z]+(?:[-' ]?[A-Za-z]+)*$/.test(first)){ $('#firstErr').text('Letters only'); ok=false; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ $('#emailErr').text('Invalid email'); ok=false; }
+  if(!ok) return;
+  addStudentRow({id, last, first}, new Array(TOTAL_SESSIONS).fill(true), new Array(TOTAL_SESSIONS).fill(false));
+  $('#confirm').show().delay(2200).fadeOut();
+  this.reset();
+});
+
+/* Search */
+$('#searchBox').on('input', function() {
+  const q = $(this).val().trim().toLowerCase();
+  $tbody.find('tr').each(function() {
+    const $tr = $(this);
+    const last = $tr.find('.cell-last').text().toLowerCase();
+    const first = $tr.find('.cell-first').text().toLowerCase();
+    $tr.toggle(last.includes(q) || first.includes(q));
+  });
+});
+
+/* Sorting */
+$('#sortAbs').on('click', function() {
+  const $rows = $tbody.find('tr').get();
+  $rows.sort((a,b) => {
+    const aAbs = parseInt($(a).find('.cell-abs').text()) || 0;
+    const bAbs = parseInt($(b).find('.cell-abs').text()) || 0;
+    return aAbs - bAbs;
+  });
+  $tbody.append($rows);
+  $('#sortMsg').text('Sorted by absences (ascending)');
+});
+
+$('#sortPar').on('click', function() {
+  const $rows = $tbody.find('tr').get();
+  $rows.sort((a,b) => {
+    const aPar = parseInt($(a).find('.cell-par').text()) || 0;
+    const bPar = parseInt($(b).find('.cell-par').text()) || 0;
+    return bPar - aPar;
+  });
+  $tbody.append($rows);
+  $('#sortMsg').text('Sorted by participation (descending)');
+});
+
+/* Highlight excellent: animate rows with fewer than 3 absences */
+$('#highlightGood').on('click', function() {
+  $tbody.find('tr').each(function() {
+    const abs = parseInt($(this).find('.cell-abs').text()) || 0;
+    if(abs < 3){
+      $(this).fadeTo(350, 0.5).fadeTo(350, 1).fadeTo(350, 0.5).fadeTo(350, 1);
+    }
+  });
+});
+
+$('#resetColors').on('click', function() {
+  $tbody.find('tr').each(function() {
+    updateRow($(this));
+  });
+});
+
+/* Report: compute totals and draw a simple bar chart + weekly grouped chart */
+$('#showReport').on('click', function() {
+  const $rows = $tbody.find('tr');
+  const total = $rows.length;
+  let presentStudents = 0, participatedStudents = 0;
+  let totalPresent = 0, totalPart = 0;
+  
+  $rows.each(function() {
+    const $row = $(this);
+    const pCount = $row.find('.present:checked').length;
+    const parCount = $row.find('.part:checked').length;
+    if(pCount > 0) presentStudents++;
+    if(parCount > 0) participatedStudents++;
+    totalPresent += pCount;
+    totalPart += parCount;
+  });
+  
+  $reportSummary.html(`
+    Total students: <strong>${total}</strong> · Students present (at least 1 session): <strong>${presentStudents}</strong>
+    · Students participated (≥1): <strong>${participatedStudents}</strong>
+  `);
+  drawChart({total, totalPresent, totalPart});
+  drawWeeklyGroupedChart();
+  $reportArea.show();
+});
+
+/* small canvas bar chart */
+function drawChart(data){
+  const w = $reportCanvas[0].width, h = $reportCanvas[0].height;
+  reportCtx.clearRect(0,0,w,h);
+  const labels = ['Total possible', 'Present (sum)', 'Participation (sum)'];
+  const values = [data.total * TOTAL_SESSIONS, data.totalPresent, data.totalPart];
+  const maxV = Math.max(...values,1);
+  const padding = 40, barW = Math.floor((w - padding*2) / values.length * 0.6);
+  values.forEach((val,i)=>{
+    const x = padding + i * ((w - padding*2) / values.length) + 20;
+    const barH = Math.round((val / maxV) * (h - 100));
+    // draw bar
+    reportCtx.fillStyle = i===0 ? '#e5e7eb' : (i===1 ? '#60a5fa' : '#60d394');
+    reportCtx.fillRect(x, h - 50 - barH, barW, barH);
+    // label
+    reportCtx.fillStyle = '#374151'; reportCtx.font = '12px sans-serif'; reportCtx.textAlign = 'center';
+    reportCtx.fillText(labels[i], x + barW/2, h - 30);
+    reportCtx.fillText(String(val), x + barW/2, h - 60 - barH);
+  });
+}
+
+/* Weekly grouped chart: 18 bars (3 per week) */
+function drawWeeklyGroupedChart(){
+  // compute per-week counts
+  const $rows = $tbody.find('tr');
+  const presents = new Array(TOTAL_SESSIONS).fill(0);
+  const parts = new Array(TOTAL_SESSIONS).fill(0);
+  const absences = new Array(TOTAL_SESSIONS).fill(0);
+
+  $rows.each(function(){
+    const $row = $(this);
+    $row.find('.present').each(function(i){
+      if(this.checked) presents[i]++; else absences[i]++;
+    });
+    $row.find('.part').each(function(i){
+      if(this.checked) parts[i]++;
+    });
+  });
+
+  // prepare values array: [S1_P, S1_Pa, S1_A, S2_P, S2_Pa, S2_A, ...]
+  const values = [];
+  for(let i=0;i<TOTAL_SESSIONS;i++){
+    values.push(presents[i]);
+    values.push(parts[i]);
+    values.push(absences[i]);
+  }
+
+  // draw on weeklyCanvas
+  const c = weeklyCanvas;
+  const ctx = weeklyCtx;
+  const w = c.width, h = c.height;
+  ctx.clearRect(0,0,w,h);
+
+  // visual settings
+  const groupCount = TOTAL_SESSIONS; // 6
+  const itemsPerGroup = 3; // P, Pa, A
+  // compute bar widths and spacing
+  const leftPadding = 50;
+  const rightPadding = 30;
+  const topPadding = 30;
+  const bottomPadding = 60;
+  const usableW = w - leftPadding - rightPadding;
+  const groupSpacing = 20;
+  const groupWidth = (usableW - (groupSpacing * (groupCount-1))) / groupCount;
+  const barWidth = Math.max(12, Math.floor((groupWidth) / (itemsPerGroup + 1))); // small gap between bars
+
+  const maxV = Math.max(...values,1);
+  // Colors for P, Pa, Abs
+  const colors = ['#2563eb','#16a34a','#dc2626'];
+
+  // Title
+  ctx.fillStyle = '#111';
+  ctx.font = '14px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Weekly — Presence (blue) / Participation (green) / Absence (red)', leftPadding, 18);
+
+  // draw groups
+  for(let g=0; g<groupCount; g++){
+    const groupX = leftPadding + g * (groupWidth + groupSpacing);
+    // draw each of the 3 bars
+    for(let j=0;j<itemsPerGroup;j++){
+      const idx = g*itemsPerGroup + j;
+      const val = values[idx];
+      const barH = Math.round((val / maxV) * (h - topPadding - bottomPadding));
+      const x = groupX + j * (barWidth + 6) + 6; // inner padding
+      const y = h - bottomPadding - barH;
+      ctx.fillStyle = colors[j];
+      ctx.fillRect(x, y, barWidth, barH);
+      // value above bar
+      ctx.fillStyle = '#111';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(val), x + barWidth/2, y - 6);
+    }
+    // group label (S1..S6)
+    ctx.fillStyle = '#374151';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    const labelX = groupX + (groupWidth/2);
+    ctx.fillText('S' + (g+1), labelX, h - bottomPadding + 30);
+  }
+
+  // y-axis ticks (optional)
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'right';
+  const ticks = 4;
+  for(let t=0;t<=ticks;t++){
+    const ty = topPadding + ((h - topPadding - bottomPadding) * t / ticks);
+    const tickVal = Math.round(maxV - (maxV * t / ticks));
+    ctx.fillText(tickVal, leftPadding - 8, ty + 4);
+    // optional line
+    ctx.strokeStyle = '#f3f4f6';
+    ctx.beginPath();
+    ctx.moveTo(leftPadding, ty);
+    ctx.lineTo(w - rightPadding, ty);
+    ctx.stroke();
+  }
+}
+
+function escapeHtml(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+/* initialize */
+createSampleData();
+updateAll();
+</script>
+</body>
+</html>
